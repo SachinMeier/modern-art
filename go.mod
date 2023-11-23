@@ -1,4 +1,4 @@
-module modern-art
+module github.com/SachinMeier/modern-art.git
 
 go 1.20
 

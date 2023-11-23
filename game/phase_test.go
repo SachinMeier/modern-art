@@ -2,8 +2,8 @@ package game_test
 
 import (
 	"context"
+	"github.com/SachinMeier/modern-art.git/game"
 	"github.com/stretchr/testify/suite"
-	"modern-art/game"
 	"testing"
 )
 
@@ -29,25 +29,77 @@ func (suite *PhaseTestSuite) TearDownTest() {
 
 func (suite *PhaseTestSuite) TearDownSuite() {}
 
-func (suite *PhaseTestSuite) TestPhaseRankedArtists() {
-	phase := map[game.Artist]int{
-		game.Manuel: 1 * game.PointsPerArtPiece,
-		game.Sigrid: 2 * game.PointsPerArtPiece,
-		game.Daniel: 3 * game.PointsPerArtPiece,
-		game.Ramon:  4 * game.PointsPerArtPiece,
-		game.Rafael: 5 * game.PointsPerArtPiece,
-	}
-	order := []game.Artist{
-		game.Rafael,
-		game.Ramon,
-		game.Daniel,
-		game.Sigrid,
-		game.Manuel,
+func (suite *PhaseTestSuite) Test_PhaseRankedArtists() {
+	// 1. Test that the artists are sorted by points.
+	{
+		phase := game.Phase(map[game.Artist]int{
+			game.Manuel: game.Point(1),
+			game.Sigrid: game.Point(2),
+			game.Daniel: game.Point(3),
+			game.Ramon:  game.Point(4),
+			game.Rafael: game.Point(5),
+		})
+		order := []game.Artist{
+			game.Rafael,
+			game.Ramon,
+			game.Daniel,
+			game.Sigrid,
+			game.Manuel,
+		}
+
+		artists := phase.RankedArtists()
+
+		for i, artist := range artists {
+			suite.Equal(order[i], artist)
+		}
 	}
 
-	artists := phase.RankedArtists()
+	// 2. Test that tie breakers are applied correctly
+	{
+		phase := game.Phase(map[game.Artist]int{
+			game.Manuel: game.Point(1),
+			game.Sigrid: game.Point(1),
+			game.Daniel: game.Point(1),
+			game.Ramon:  game.Point(1),
+			game.Rafael: game.Point(1),
+		})
+		order := []game.Artist{
+			game.Manuel,
+			game.Sigrid,
+			game.Daniel,
+			game.Ramon,
+			game.Rafael,
+		}
 
-	for i, artist := range artists {
-		suite.Equal(order[i], artist)
+		artists := phase.RankedArtists()
+
+		for i, artist := range artists {
+			suite.Equal(order[i], artist)
+		}
+	}
+
+	// 3. Test that tie breakers are applied correctly
+	// but don't overrule the points.
+	{
+		phase := game.Phase(map[game.Artist]int{
+			game.Manuel: game.Point(5),
+			game.Sigrid: game.Point(1),
+			game.Daniel: game.Point(1),
+			game.Ramon:  game.Point(2),
+			game.Rafael: game.Point(2),
+		})
+		order := []game.Artist{
+			game.Manuel,
+			game.Ramon,
+			game.Rafael,
+			game.Sigrid,
+			game.Daniel,
+		}
+
+		artists := phase.RankedArtists()
+
+		for i, artist := range artists {
+			suite.Equal(order[i], artist)
+		}
 	}
 }
