@@ -1,12 +1,16 @@
 package players
 
-import "github.com/SachinMeier/modern-art.git/game"
+import (
+	"crypto/rand"
+	"github.com/SachinMeier/modern-art.git/game"
+	"math/big"
+)
 
 // DummyPlayer is a dummy player for testing
 type DummyPlayer struct {
 	name       string
-	Hand       []game.ArtPiece
-	Collection []game.ArtPiece
+	Hand       []*game.ArtPiece
+	Collection []*game.ArtPiece
 	Money      int
 }
 
@@ -29,45 +33,46 @@ func (dp *DummyPlayer) SetName(name string) {
 }
 
 // HoldAuction returns the first card in their Hand
-func (dp *DummyPlayer) HoldAuction() (game.Auction, error) {
+func (dp *DummyPlayer) HoldAuction() (*game.Auction, error) {
 	// take first card in Hand
 	artPiece := dp.Hand[0]
 	// remove it from the Hand
 	dp.Hand = dp.Hand[1:]
-	return game.Auction{
-		ArtPiece: &artPiece,
+	return &game.Auction{
+		Auctioneer: dp,
+		ArtPiece:   artPiece,
 	}, nil
 }
 
 // Bid requests the Player to place a Bid on an Auction
-func (dp *DummyPlayer) Bid(auction game.Auction) (game.Bid, error) {
-	// Bid 10% of their money
-	// TODO: make this random
-	return game.Bid{
-		PlayerName: dp.name,
-		Value:      dp.Money / 10,
+func (dp *DummyPlayer) Bid(auction *game.Auction) (*game.Bid, error) {
+	// bid a random amount up to half of their money
+	amount, _ := randInt(dp.Money / 2)
+	return &game.Bid{
+		Bidder: dp,
+		Value:  amount,
 	}, nil
 }
 
-// HandleAuctionResult informs the Player of the result of an Auction by sharing the wining Bid
-func (dp *DummyPlayer) HandleAuctionResult(winner game.Bid) {
-	if winner.PlayerName == dp.name {
+// HandleAuctionResult informs the Player of the result of an game.Auction
+func (dp *DummyPlayer) HandleAuctionResult(auction *game.Auction) {
+	if auction.WinningBid.Bidder.Name() == dp.name {
 		// add the ArtPiece to their Collection
-		dp.Collection = append(dp.Collection, *winner.ArtPiece)
+		dp.Collection = append(dp.Collection, auction.ArtPiece)
 	}
 }
 
 // AddArtPieces adds ArtPiece's to the Player's Hand
-func (dp *DummyPlayer) AddArtPieces(pieces []game.ArtPiece) {
+func (dp *DummyPlayer) AddArtPieces(pieces []*game.ArtPiece) {
 	dp.Hand = append(dp.Hand, pieces...)
-}
-
-// GiveArtPiece puts an ArtPiece in the Player's collection for the Phase
-func (dp *DummyPlayer) GiveArtPiece(artPiece game.ArtPiece) {
-	dp.Collection = append(dp.Collection, artPiece)
 }
 
 // MoveMoney gives the Player money. Currently only used for payouts.
 func (dp *DummyPlayer) MoveMoney(amount int) {
 	dp.Money += amount
+}
+
+func randInt(max int) (int, error) {
+	i, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	return int(i.Int64()), err
 }

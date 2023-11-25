@@ -1,5 +1,10 @@
 package game
 
+const (
+	MaxPlayers    = 5
+	StartingMoney = 100
+)
+
 // Game is the main struct for the game.
 // It holds all the state of the game.
 type Game struct {
@@ -7,23 +12,43 @@ type Game struct {
 	PastPhases   []Phase
 	Players      PlayerOrder
 	// ArtPieces is the Deck to be dealt out
-	ArtPieces []ArtPiece
+	ArtPieces []*ArtPiece
 }
 
 // NewGame creates a new Game
 func NewGame(players []Player) *Game {
+	if len(players) > MaxPlayers {
+		panic("too many players")
+	}
 	playerOrder := NewPlayerOrder(players)
 	g := &Game{
 		CurrentPhase: Phase1,
 		PastPhases:   []Phase{},
 		Players:      playerOrder,
+		ArtPieces:    NewArtPieceDeck(),
 	}
-	g.dealArtPieces()
+
+	for _, player := range g.Players {
+		g.givePlayerMoney(player, StartingMoney)
+	}
+
 	return g
 }
 
-// DoPhase does a phase of the game
-func (g *Game) DoPhase() {
+// Start begins the game
+func (g *Game) Start() map[string]int {
+	for {
+		if gameOver := g.DoPhase(); gameOver {
+			break
+		}
+	}
+	return g.CalculateScores()
+}
+
+// DoPhase does a phase of the game. Returns true if game is over
+func (g *Game) DoPhase() bool {
+	// dealCards uses CurrentPhase to determine how many cards to deal
+	g.DealArtPieces()
 	phase := NewPhase()
 	for {
 		if isOver := g.doTurn(&phase); isOver {
@@ -31,61 +56,99 @@ func (g *Game) DoPhase() {
 		}
 	}
 	g.PastPhases = append(g.PastPhases, phase)
-	// payout uses CurrentPhase as the index of the phase in PastPhases
+	// PayoutPlayer uses CurrentPhase as the index of the phase in PastPhases
 	// so we only increment it after payout is done
-	g.payout()
-	g.CurrentPhase++
-	// dealCards uses CurrentPhase to determine how many cards to deal
-	g.dealArtPieces()
+	g.PayoutPlayers()
+	if gameOver := g.NextPhase(); gameOver {
+		return true
+	}
+	return false
 }
 
 // doTurn does a turn of a Phase
 func (g *Game) doTurn(phase *Phase) bool {
-	player := g.Players.Pop()
+	auctioneer := g.Players.Pop()
 
-	// Ask the player whose turn it is to hold an auction
-	auction, err := player.Player.HoldAuction()
+	// Ask the auctioneer whose turn it is to hold an auction
+	auction, err := auctioneer.Player.HoldAuction()
 	if err != nil {
 		// TODO: handle error? or just crash game
 		panic(err)
 	}
-	phase.AddArtPiece(auction.ArtPiece.Artist)
+	// TODO: validate auction and maybe even set auction.Auctioneer
+	// remove the ArtPiece from the auctioneer's hand
+	if err := auctioneer.RemoveArtPieceFromHand(auction.ArtPiece); err != nil {
+		panic(err)
+	}
 	// If the auctioned piece ends the round, don't do the auction
-	if phase.IsOver() {
+	if phase.IsOver(auction.ArtPiece.Artist) {
+		// set auction Bid to nil to indicate no winner. This is necessary
+		// for fixed-price auctions where the auctioneer bids first. Then
+		// add it to the phase to allow for payouts & scoring
+		auction.WinningBid = nil
+		phase.AddAuction(auction)
+		// we need to push the auctioneer back on the end of the queue
+		// to ensure all auctioneers are remembered for payouts & scoring
+		g.Players.Push(auctioneer)
 		return true
 	}
 
 	// push Player to end to allow them to Bid on their own Auction
 	// TODO: in the case of a fixed-price auction, Auctioneer bids first, so this
 	// should not happen until after the bids are taken in.
-	g.Players.Push(player)
-	// Copy the player order to allow each player to bid
-	auctionBidders := g.Players.Copy()
+	g.Players.Push(auctioneer)
 
-	// get a bid from each player
-	// map[PlayerName]Bid
-	// TODO: consider this implementation. To collect data, might be better
-	// TODO: to have a map[PlayerName]Bid
-	// TODO: here is where we switch-case on AuctionType, for now just 1-shot
-	var winningBid Bid
+	// Copy the auctioneer order to allow each player to bid
+	auctionBidders := g.Players.Copy()
+	auction.Run(auctionBidders)
+
+	// add Winning Bid to the Phase
+	phase.AddAuction(auction)
+	// notify all auctioneers of the result
 	for _, bidder := range auctionBidders {
-		bid, err := bidder.Player.Bid(auction)
-		if err != nil {
-			panic(err)
-		}
-		winningBid = BetterBid(winningBid, bid)
+		bidder.Player.HandleAuctionResult(auction)
 	}
-	// notify all players of the result
-	for _, bidder := range auctionBidders {
-		bidder.Player.HandleAuctionResult(winningBid)
+
+	buyer := g.LookupGamePlayer(auction.WinningBid.Bidder.Name())
+	// debit money from the buyer
+	g.givePlayerMoney(buyer, -auction.WinningBid.Value)
+	// give buyer the art piece
+	buyer.Collection = append(buyer.Collection, auction.ArtPiece)
+	// if the auctioneer bought their own painting, money goes to the bank
+	// else give money to the auctioneer
+	if auctioneer.Player.Name() != auction.WinningBid.Bidder.Name() {
+		g.givePlayerMoney(auctioneer, auction.WinningBid.Value)
 	}
 	// round can't end after an auction
 	return false
 }
 
-// payout pays out the players after a concluded Phase
-func (g *Game) payout() {
-	payouts := g.PastPhases[g.CurrentPhase].Payouts()
+// NextPhase increments the CurrentPhase
+func (g *Game) NextPhase() bool {
+	g.CurrentPhase++
+	return g.GameOver()
+}
+
+// LookupGamePlayer returns the GamePlayer for a given Player name
+// NOTE: returns nil, leading to a panic, if the player is not found
+// TODO: Possibly add map of players to make this O(1), but its max O(5) anyway
+func (g *Game) LookupGamePlayer(name string) *GamePlayer {
+	for _, player := range g.Players {
+		if player.Player.Name() == name {
+			return player
+		}
+	}
+	return nil
+}
+
+// GameOver returns true if the game is over
+func (g *Game) GameOver() bool {
+	return g.CurrentPhase > FinalPhase
+}
+
+// PayoutPlayers pays out the players after a concluded Phase
+func (g *Game) PayoutPlayers() {
+	payouts := CumulativePayouts(g.PastPhases)
 
 	// sum the value of their ArtPiece collection
 	for _, player := range g.Players {
@@ -94,51 +157,70 @@ func (g *Game) payout() {
 			phaseRevenue += payouts[artPiece.Artist]
 		}
 		// give the player the money
-		player.Money += phaseRevenue
-		// clear colletion
-		player.Collection = []ArtPiece{}
+		g.givePlayerMoney(player, phaseRevenue)
+		// clear collection
+		player.Collection = []*ArtPiece{}
 	}
 }
 
+// ArtPiecesPerPhase map[playerCount]map[phaseNumber]artPiecesPerPhase
 // TODO: check these numbers
-// map[playerCount]map[phaseNumber]artPiecesPerPhase
-var artPiecesPerPhase = map[int]map[PhaseNumber]int{
+var ArtPiecesPerPhase = map[int]map[PhaseNumber]int{
 	3: {
 		Phase1: 10,
 		Phase2: 4,
 		Phase3: 4,
+		Phase4: 0,
 	},
 	4: {
 		Phase1: 8,
 		Phase2: 4,
 		Phase3: 4,
+		Phase4: 0,
 	},
 	5: {
 		Phase1: 8,
 		Phase2: 3,
 		Phase3: 3,
+		Phase4: 0,
 	},
 }
 
-func (g *Game) dealArtPieces() {
-	piecesToDeal := artPiecesPerPhase[len(g.Players)][g.CurrentPhase]
+// DealArtPieces deals ArtPieces to the players
+func (g *Game) DealArtPieces() {
+	piecesToDeal := ArtPiecesPerPhase[len(g.Players)][g.CurrentPhase]
 	for _, player := range g.Players {
-		pieces := make([]ArtPiece, piecesToDeal, piecesToDeal)
+		pieces := make([]*ArtPiece, piecesToDeal, piecesToDeal)
 		for i := 0; i < piecesToDeal; i++ {
-			pieces = append(pieces, g.dealArtPiece())
+			pieces[i] = g.dealArtPiece()
 		}
-		player.Player.AddArtPieces(pieces)
+		g.givePlayerArtPieces(player, pieces)
 	}
 }
 
 func (g *Game) dealArtPiece() *ArtPiece {
-	// TODO: pick a random card
-	return nil
+	artPiece, remaining := pickRandomArtPiece(g.ArtPieces)
+	g.ArtPieces = remaining
+	return artPiece
 }
 
-// Start begins the game
-func (g *Game) Start() {
-	for range PhaseRange() {
-		g.DoPhase()
+func (g *Game) givePlayerMoney(player *GamePlayer, amount int) {
+	player.Money += amount
+	// notify player of payout
+	player.Player.MoveMoney(amount)
+}
+
+func (g *Game) givePlayerArtPieces(player *GamePlayer, artPieces []*ArtPiece) {
+	player.Hand = append(player.Hand, artPieces...)
+	// notify player of new art pieces
+	player.Player.AddArtPieces(artPieces)
+}
+
+// CalculateScores returns a map of player names -> scores
+func (g *Game) CalculateScores() map[string]int {
+	scores := make(map[string]int)
+	for _, player := range g.Players {
+		scores[player.Player.Name()] = player.Money
 	}
+	return scores
 }

@@ -1,11 +1,11 @@
 package game
 
 // PlayerOrder a FIFO queue of players
-type PlayerOrder []GamePlayer
+type PlayerOrder []*GamePlayer
 
 // NewPlayerOrder creates a new PlayerOrder from a slice of Players
 func NewPlayerOrder(players []Player) PlayerOrder {
-	gamePlayers := make([]GamePlayer, len(players), len(players))
+	gamePlayers := make([]*GamePlayer, len(players), len(players))
 	for i, player := range players {
 		gamePlayers[i] = NewGamePlayer(player)
 	}
@@ -13,7 +13,7 @@ func NewPlayerOrder(players []Player) PlayerOrder {
 }
 
 // Pop removes the first player from the PlayerOrder and returns it
-func (po *PlayerOrder) Pop() GamePlayer {
+func (po *PlayerOrder) Pop() *GamePlayer {
 	player := (*po)[0]
 	*po = (*po)[1:]
 	return player
@@ -21,7 +21,7 @@ func (po *PlayerOrder) Pop() GamePlayer {
 
 // Push adds a player to the end of the PlayerOrder,
 // should be called at the end of their turn
-func (po *PlayerOrder) Push(player GamePlayer) {
+func (po *PlayerOrder) Push(player *GamePlayer) {
 	*po = append(*po, player)
 }
 

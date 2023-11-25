@@ -3,6 +3,7 @@ package game_test
 import (
 	"context"
 	"github.com/SachinMeier/modern-art.git/game"
+	"github.com/SachinMeier/modern-art.git/game/players"
 	"github.com/stretchr/testify/suite"
 	"testing"
 )
@@ -32,13 +33,15 @@ func (suite *PhaseTestSuite) TearDownSuite() {}
 func (suite *PhaseTestSuite) Test_PhaseRankedArtists() {
 	// 1. Test that the artists are sorted by points.
 	{
-		phase := game.Phase(map[game.Artist]int{
-			game.Manuel: game.Point(1),
-			game.Sigrid: game.Point(2),
-			game.Daniel: game.Point(3),
-			game.Ramon:  game.Point(4),
-			game.Rafael: game.Point(5),
-		})
+		phase := game.Phase{
+			ArtistCounts: map[game.Artist]int{
+				game.Manuel: game.Point(1),
+				game.Sigrid: game.Point(2),
+				game.Daniel: game.Point(3),
+				game.Ramon:  game.Point(4),
+				game.Rafael: game.Point(5),
+			},
+		}
 		order := []game.Artist{
 			game.Rafael,
 			game.Ramon,
@@ -54,15 +57,17 @@ func (suite *PhaseTestSuite) Test_PhaseRankedArtists() {
 		}
 	}
 
-	// 2. Test that tie breakers are applied correctly
+	// 2. Test that tiebreakers are applied correctly
 	{
-		phase := game.Phase(map[game.Artist]int{
-			game.Manuel: game.Point(1),
-			game.Sigrid: game.Point(1),
-			game.Daniel: game.Point(1),
-			game.Ramon:  game.Point(1),
-			game.Rafael: game.Point(1),
-		})
+		phase := game.Phase{
+			ArtistCounts: map[game.Artist]int{
+				game.Manuel: game.Point(1),
+				game.Sigrid: game.Point(1),
+				game.Daniel: game.Point(1),
+				game.Ramon:  game.Point(1),
+				game.Rafael: game.Point(1),
+			},
+		}
 		order := []game.Artist{
 			game.Manuel,
 			game.Sigrid,
@@ -78,16 +83,18 @@ func (suite *PhaseTestSuite) Test_PhaseRankedArtists() {
 		}
 	}
 
-	// 3. Test that tie breakers are applied correctly
+	// 3. Test that tiebreakers are applied correctly
 	// but don't overrule the points.
 	{
-		phase := game.Phase(map[game.Artist]int{
-			game.Manuel: game.Point(5),
-			game.Sigrid: game.Point(1),
-			game.Daniel: game.Point(1),
-			game.Ramon:  game.Point(2),
-			game.Rafael: game.Point(2),
-		})
+		phase := game.Phase{
+			ArtistCounts: map[game.Artist]int{
+				game.Manuel: game.Point(5),
+				game.Sigrid: game.Point(1),
+				game.Daniel: game.Point(1),
+				game.Ramon:  game.Point(2),
+				game.Rafael: game.Point(2),
+			},
+		}
 		order := []game.Artist{
 			game.Manuel,
 			game.Ramon,
@@ -101,5 +108,84 @@ func (suite *PhaseTestSuite) Test_PhaseRankedArtists() {
 		for i, artist := range artists {
 			suite.Equal(order[i], artist)
 		}
+	}
+
+	// 4. Test empty phase
+	{
+		phase := game.Phase{
+			ArtistCounts: map[game.Artist]int{},
+		}
+		order := []game.Artist{
+			game.Manuel,
+			game.Sigrid,
+			game.Daniel,
+			game.Ramon,
+			game.Rafael,
+		}
+		artists := phase.RankedArtists()
+
+		for i, artist := range artists {
+			suite.Equal(order[i], artist)
+		}
+	}
+}
+
+func (suite *PhaseTestSuite) Test_PhaseAddAuction() {
+	// 1. Test that the winning bid is added to the phase
+	{
+		p1 := players.NewDummyPlayer("1")
+		p2 := players.NewDummyPlayer("2")
+		phase := game.NewPhase()
+
+		auction1 := newAuctionWithWinningBid(p1, game.Manuel, p2, 1)
+		phase.AddAuction(auction1)
+		suite.Equal(1, len(phase.Auctions))
+		mustMatchAuctions(&suite.Suite, auction1, phase.Auctions[0])
+		suite.Equal(game.Point(1), phase.ArtistCounts[game.Manuel])
+
+		auction2 := newAuctionWithWinningBid(p2, game.Sigrid, p1, 2)
+		phase.AddAuction(auction2)
+		suite.Equal(2, len(phase.Auctions))
+		mustMatchAuctions(&suite.Suite, auction2, phase.Auctions[1])
+		suite.Equal(game.Point(1), phase.ArtistCounts[game.Sigrid])
+
+		auction3 := newAuctionWithWinningBid(p1, game.Manuel, p2, 3)
+		phase.AddAuction(auction3)
+		suite.Equal(3, len(phase.Auctions))
+		mustMatchAuctions(&suite.Suite, auction3, phase.Auctions[2])
+		suite.Equal(game.Point(2), phase.ArtistCounts[game.Manuel])
+
+		suite.Equal(game.Point(2), phase.ArtistCounts[game.Manuel])
+		suite.Equal(game.Point(1), phase.ArtistCounts[game.Sigrid])
+		suite.Equal(game.Point(0), phase.ArtistCounts[game.Daniel])
+		suite.Equal(game.Point(0), phase.ArtistCounts[game.Ramon])
+		suite.Equal(game.Point(0), phase.ArtistCounts[game.Rafael])
+	}
+}
+
+func (suite *PhaseTestSuite) Test_PhaseIsOver() {
+	// 1. New Phase is not over
+	{
+		phase := game.NewPhase()
+		suite.False(phase.IsOver(game.Manuel))
+	}
+
+	// 2. Phase is over based on artist
+	{
+		phase := game.Phase{
+			ArtistCounts: map[game.Artist]int{
+				game.Manuel: game.Point(0),
+				game.Sigrid: game.Point(1),
+				game.Daniel: game.Point(2),
+				game.Ramon:  game.Point(3),
+				game.Rafael: game.Point(4),
+			},
+		}
+		suite.False(phase.IsOver(game.Manuel))
+		suite.False(phase.IsOver(game.Sigrid))
+		suite.False(phase.IsOver(game.Daniel))
+		suite.False(phase.IsOver(game.Ramon))
+		suite.True(phase.IsOver(game.Rafael))
+
 	}
 }
