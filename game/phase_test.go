@@ -172,20 +172,147 @@ func (suite *PhaseTestSuite) Test_PhaseIsOver() {
 
 	// 2. Phase is over based on artist
 	{
-		phase := game.Phase{
-			ArtistCounts: map[game.Artist]int{
-				game.Manuel: game.Point(0),
-				game.Sigrid: game.Point(1),
-				game.Daniel: game.Point(2),
-				game.Ramon:  game.Point(3),
-				game.Rafael: game.Point(4),
-			},
-		}
+		phase := newPhase(0, 1, 2, 3, 4)
 		suite.False(phase.IsOver(game.Manuel))
 		suite.False(phase.IsOver(game.Sigrid))
 		suite.False(phase.IsOver(game.Daniel))
 		suite.False(phase.IsOver(game.Ramon))
 		suite.True(phase.IsOver(game.Rafael))
-
 	}
+}
+
+func (suite *PhaseTestSuite) Test_PhasePayouts() {
+	// 1. Test that the payouts are correct for single phase
+	{
+		phase := newPhase(0, 1, 2, 3, 5)
+		payouts := phase.PhasePayouts()
+		suite.Equal(5, len(payouts))
+
+		suite.Equal(0, payouts[game.Manuel])
+		suite.Equal(0, payouts[game.Sigrid])
+		suite.Equal(game.RankPayout3, payouts[game.Daniel])
+		suite.Equal(game.RankPayout2, payouts[game.Ramon])
+		suite.Equal(game.RankPayout1, payouts[game.Rafael])
+	}
+
+	// only 2 winners
+	{
+		phase := newPhase(0, 0, 0, 3, 5)
+		payouts := phase.PhasePayouts()
+		suite.Equal(5, len(payouts))
+
+		suite.Equal(0, payouts[game.Manuel])
+		suite.Equal(0, payouts[game.Sigrid])
+		suite.Equal(0, payouts[game.Daniel])
+		suite.Equal(game.RankPayout2, payouts[game.Ramon])
+		suite.Equal(game.RankPayout1, payouts[game.Rafael])
+	}
+
+	// only 1 winner
+	{
+		phase := newPhase(5, 0, 0, 0, 0)
+		payouts := phase.PhasePayouts()
+		suite.Equal(5, len(payouts))
+
+		suite.Equal(game.RankPayout1, payouts[game.Manuel])
+		suite.Equal(0, payouts[game.Sigrid])
+		suite.Equal(0, payouts[game.Daniel])
+		suite.Equal(0, payouts[game.Ramon])
+		suite.Equal(0, payouts[game.Rafael])
+	}
+
+	// test tiebreaker scenario
+	{
+		phase := newPhase(5, 1, 1, 1, 0)
+		payouts := phase.PhasePayouts()
+		suite.Equal(5, len(payouts))
+
+		suite.Equal(game.RankPayout1, payouts[game.Manuel])
+		suite.Equal(game.RankPayout2, payouts[game.Sigrid])
+		suite.Equal(game.RankPayout3, payouts[game.Daniel])
+		suite.Equal(0, payouts[game.Ramon])
+		suite.Equal(0, payouts[game.Rafael])
+	}
+}
+
+func (suite *PhaseTestSuite) Test_CumulativePayouts() {
+	// test 1 round
+	{
+		phases := []game.Phase{
+			newPhase(1, 2, 3, 4, 5),
+		}
+		payouts := game.CumulativePayouts(phases)
+		suite.Equal(5, len(payouts))
+		suite.Equal(0, payouts[game.Manuel])
+		suite.Equal(0, payouts[game.Sigrid])
+		suite.Equal(game.RankPayout3, payouts[game.Daniel])
+		suite.Equal(game.RankPayout2, payouts[game.Ramon])
+		suite.Equal(game.RankPayout1, payouts[game.Rafael])
+	}
+
+	// test 2 rounds
+	{
+		phases := []game.Phase{
+			newPhase(1, 2, 3, 4, 5),
+			newPhase(5, 4, 3, 2, 1),
+		}
+		payouts := game.CumulativePayouts(phases)
+		suite.Equal(5, len(payouts))
+		suite.Equal(game.RankPayout1, payouts[game.Manuel])
+		suite.Equal(game.RankPayout2, payouts[game.Sigrid])
+		suite.Equal(game.RankPayout3+game.RankPayout3, payouts[game.Daniel])
+		suite.Equal(0, payouts[game.Ramon])
+		suite.Equal(0, payouts[game.Rafael])
+	}
+
+	// test 3 rounds
+	{
+		phases := []game.Phase{
+			newPhase(1, 2, 3, 4, 5),
+			newPhase(5, 4, 3, 2, 1),
+			newPhase(0, 0, 5, 2, 3),
+		}
+		payouts := game.CumulativePayouts(phases)
+		suite.Equal(5, len(payouts))
+		suite.Equal(0, payouts[game.Manuel])
+		suite.Equal(0, payouts[game.Sigrid])
+		suite.Equal(game.RankPayout1+game.RankPayout3+game.RankPayout3, payouts[game.Daniel])
+		suite.Equal(game.RankPayout3+game.RankPayout2, payouts[game.Ramon])
+		suite.Equal(game.RankPayout2+game.RankPayout1, payouts[game.Rafael])
+	}
+
+	// test 4 rounds, past ones incomplete
+	{
+		phases := []game.Phase{
+			newPhase(0, 0, 0, 5, 4),
+			newPhase(5, 0, 0, 0, 0),
+			newPhase(0, 0, 5, 0, 0),
+			newPhase(1, 2, 3, 4, 5),
+		}
+		payouts := game.CumulativePayouts(phases)
+		suite.Equal(5, len(payouts))
+		suite.Equal(0, payouts[game.Manuel])
+		suite.Equal(0, payouts[game.Sigrid])
+		suite.Equal(game.RankPayout3+game.RankPayout1, payouts[game.Daniel])
+		suite.Equal(game.RankPayout2+game.RankPayout1, payouts[game.Ramon])
+		suite.Equal(game.RankPayout1+game.RankPayout2, payouts[game.Rafael])
+	}
+
+	// test 4 rounds, current one incomplete
+	{
+		phases := []game.Phase{
+			newPhase(0, 0, 0, 5, 4),
+			newPhase(5, 0, 0, 0, 0),
+			newPhase(0, 0, 5, 0, 0),
+			newPhase(0, 2, 5, 0, 0),
+		}
+		payouts := game.CumulativePayouts(phases)
+		suite.Equal(5, len(payouts))
+		suite.Equal(0, payouts[game.Manuel])
+		suite.Equal(game.RankPayout2, payouts[game.Sigrid])
+		suite.Equal(game.RankPayout1+game.RankPayout1, payouts[game.Daniel])
+		suite.Equal(0, payouts[game.Ramon])
+		suite.Equal(0, payouts[game.Rafael])
+	}
+
 }

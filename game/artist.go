@@ -34,6 +34,8 @@ const (
 	Ramon Artist = "Ramon Martins"
 	// Rafael = Orange (16)
 	Rafael Artist = "Rafael Silvera"
+	// ArtistNone (non-existent)
+	ArtistNone Artist = ""
 )
 
 // AllArtists returns a slice of all artists.

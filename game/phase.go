@@ -16,8 +16,8 @@ const (
 // FinalPhase is the last phase. This is used to check if the game is over.
 const FinalPhase = Phase4
 
-// PhaseRange returns a slice of all PhaseNumbers
-func PhaseRange() []PhaseNumber {
+// AllPhases returns a slice of all PhaseNumbers
+func AllPhases() []PhaseNumber {
 	return []PhaseNumber{Phase1, Phase2, Phase3, Phase4}
 }
 
@@ -53,7 +53,7 @@ const (
 
 // maxArtPiecesPerPhase is the minimum number of art pieces for a given artist
 // needed to end the round. DO NOT USE
-const maxArtPiecesPerPhase = 2
+const maxArtPiecesPerPhase = 5
 
 // MaxArtPiecePointsPerPhase is the minimum number of points for a given artist
 // Use this when comparing with ArtistCounts
@@ -77,7 +77,15 @@ func (p *Phase) AddAuction(auction *Auction) {
 // Winners returns the top 3 artists in the phase.
 func (p *Phase) Winners() (Artist, Artist, Artist) {
 	artists := p.RankedArtists()
-	return artists[0], artists[1], artists[2]
+	first, second, third := artists[0], artists[1], artists[2]
+	if p.ArtistCounts[second] < PointsPerArtPiece {
+		second = ArtistNone
+	}
+	if p.ArtistCounts[third] < PointsPerArtPiece {
+		third = ArtistNone
+	}
+
+	return first, second, third
 }
 
 // RankedArtists returns a slice of artists sorted by points.
@@ -93,17 +101,17 @@ func (p *Phase) RankedArtists() []Artist {
 	return artists
 }
 
-// phasePayouts returns a map of artists to their payouts for this isolated Phase
-func (p *Phase) phasePayouts() map[Artist]int {
-	artists := p.RankedArtists()
+// PhasePayouts returns a map of artists to their payouts for this isolated Phase
+func (p *Phase) PhasePayouts() map[Artist]int {
+	first, second, third := p.Winners()
 	payouts := make(map[Artist]int)
-	for i, artist := range artists {
-		switch i {
-		case 0:
+	for _, artist := range AllArtists() {
+		switch artist {
+		case first:
 			payouts[artist] = RankPayout1
-		case 1:
+		case second:
 			payouts[artist] = RankPayout2
-		case 2:
+		case third:
 			payouts[artist] = RankPayout3
 		default:
 			payouts[artist] = 0
@@ -120,12 +128,12 @@ func CumulativePayouts(phases []Phase) map[Artist]int {
 	lastIdx := len(phases) - 1
 	// sum all but the most recent phase
 	for _, phase := range phases[:lastIdx] {
-		for artist, payout := range phase.phasePayouts() {
+		for artist, payout := range phase.PhasePayouts() {
 			prevPayouts[artist] += payout
 		}
 	}
 
-	lastPhase := phases[lastIdx].phasePayouts()
+	lastPhase := phases[lastIdx].PhasePayouts()
 	for artist, payout := range lastPhase {
 		if lastPhase[artist] != 0 {
 			lastPhase[artist] = payout + prevPayouts[artist]
