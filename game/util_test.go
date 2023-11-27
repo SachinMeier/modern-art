@@ -15,8 +15,8 @@ func newAuctionWithWinningBid(auctioneer game.Player, artist game.Artist,
 	return game.NewAuction(auctioneer, &artPiece, game.NewBid(bidder, value))
 }
 
-func newPhase(manuel, sigrid, daniel, ramon, rafael int) game.Phase {
-	return game.Phase{
+func newPhase(manuel, sigrid, daniel, ramon, rafael int) *game.Phase {
+	return &game.Phase{
 		ArtistCounts: map[game.Artist]int{
 			game.Manuel: game.Point(manuel),
 			game.Sigrid: game.Point(sigrid),

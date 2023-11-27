@@ -23,6 +23,13 @@ Things a Player can track on their own but neednt be shared:
 - How much money each other player has
 
 
+
+
+
+
+
+
+
 type PhaseNumber int
 
 const (

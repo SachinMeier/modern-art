@@ -167,17 +167,13 @@ func (suite *PhaseTestSuite) Test_PhaseIsOver() {
 	// 1. New Phase is not over
 	{
 		phase := game.NewPhase()
-		suite.False(phase.IsOver(game.Manuel))
+		suite.False(phase.IsOver())
 	}
 
 	// 2. Phase is over based on artist
 	{
-		phase := newPhase(0, 1, 2, 3, 4)
-		suite.False(phase.IsOver(game.Manuel))
-		suite.False(phase.IsOver(game.Sigrid))
-		suite.False(phase.IsOver(game.Daniel))
-		suite.False(phase.IsOver(game.Ramon))
-		suite.True(phase.IsOver(game.Rafael))
+		phase := newPhase(0, 1, 2, 3, 5)
+		suite.True(phase.IsOver())
 	}
 }
 
@@ -238,7 +234,7 @@ func (suite *PhaseTestSuite) Test_PhasePayouts() {
 func (suite *PhaseTestSuite) Test_CumulativePayouts() {
 	// test 1 round
 	{
-		phases := []game.Phase{
+		phases := []*game.Phase{
 			newPhase(1, 2, 3, 4, 5),
 		}
 		payouts := game.CumulativePayouts(phases)

@@ -28,12 +28,12 @@ type Phase struct {
 }
 
 // NewPhase creates a new Phase with all artists at 0 points.
-func NewPhase() Phase {
+func NewPhase() *Phase {
 	counts := make(map[Artist]int)
 	for _, artist := range AllArtists() {
 		counts[artist] = 0
 	}
-	return Phase{
+	return &Phase{
 		Auctions:     []*Auction{},
 		ArtistCounts: counts,
 	}
@@ -60,11 +60,16 @@ const maxArtPiecesPerPhase = 5
 var MaxArtPiecePointsPerPhase = Point(maxArtPiecesPerPhase)
 
 // IsOver returns true if the given ArtPiece ends the phase.
-func (p *Phase) IsOver(artist Artist) bool {
+func (p *Phase) IsOver() bool {
 	// >= allows playing a double when there are 4 pieces down.
 	// TODO: check rules on this
 	// TODO: edit when doubles are possible
-	return p.ArtistCounts[artist]+PointsPerArtPiece >= MaxArtPiecePointsPerPhase
+	for _, artist := range AllArtists() {
+		if p.ArtistCounts[artist] >= MaxArtPiecePointsPerPhase {
+			return true
+		}
+	}
+	return false
 }
 
 // AddAuction adds PointsPerArtPiece points to the artist's score
@@ -123,7 +128,7 @@ func (p *Phase) PhasePayouts() map[Artist]int {
 
 // CumulativePayouts returns a map of artists to their cumulative payouts
 // given a list of phases
-func CumulativePayouts(phases []Phase) map[Artist]int {
+func CumulativePayouts(phases []*Phase) map[Artist]int {
 	prevPayouts := make(map[Artist]int)
 	lastIdx := len(phases) - 1
 	// sum all but the most recent phase

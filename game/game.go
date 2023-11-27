@@ -9,7 +9,7 @@ const (
 // It holds all the state of the game.
 type Game struct {
 	CurrentPhase PhaseNumber
-	PastPhases   []Phase
+	PastPhases   []*Phase
 	Players      PlayerOrder
 	// ArtPieces is the Deck to be dealt out
 	ArtPieces []*ArtPiece
@@ -23,7 +23,7 @@ func NewGame(players []Player) *Game {
 	playerOrder := NewPlayerOrder(players)
 	g := &Game{
 		CurrentPhase: Phase1,
-		PastPhases:   []Phase{},
+		PastPhases:   []*Phase{},
 		Players:      playerOrder,
 		ArtPieces:    NewArtPieceDeck(),
 	}
@@ -51,7 +51,7 @@ func (g *Game) DoPhase() bool {
 	g.DealArtPieces()
 	phase := NewPhase()
 	for {
-		if isOver := g.doTurn(&phase); isOver {
+		if isOver := g.doTurn(phase); isOver {
 			break
 		}
 	}
@@ -81,12 +81,12 @@ func (g *Game) doTurn(phase *Phase) bool {
 		panic(err)
 	}
 	// If the auctioned piece ends the round, don't do the auction
-	if phase.IsOver(auction.ArtPiece.Artist) {
+	phase.AddAuction(auction)
+	if phase.IsOver() {
 		// set auction Bid to nil to indicate no winner. This is necessary
 		// for fixed-price auctions where the auctioneer bids first. Then
 		// add it to the phase to allow for payouts & scoring
 		auction.WinningBid = nil
-		phase.AddAuction(auction)
 		// we need to push the auctioneer back on the end of the queue
 		// to ensure all auctioneers are remembered for payouts & scoring
 		g.Players.Push(auctioneer)
@@ -102,8 +102,6 @@ func (g *Game) doTurn(phase *Phase) bool {
 	auctionBidders := g.Players.Copy()
 	auction.Run(auctionBidders)
 
-	// add Winning Bid to the Phase
-	phase.AddAuction(auction)
 	// notify all auctioneers of the result
 	for _, bidder := range auctionBidders {
 		bidder.Player.HandleAuctionResult(auction)
