@@ -1,10 +1,5 @@
 package game
 
-const (
-	MaxPlayers    = 5
-	StartingMoney = 100
-)
-
 // Game is the main struct for the game.
 // It holds all the state of the game.
 type Game struct {
@@ -159,29 +154,6 @@ func (g *Game) PayoutPlayers() {
 		// clear collection
 		player.Collection = []*ArtPiece{}
 	}
-}
-
-// ArtPiecesPerPhase map[playerCount]map[phaseNumber]artPiecesPerPhase
-// TODO: check these numbers
-var ArtPiecesPerPhase = map[int]map[PhaseNumber]int{
-	3: {
-		Phase1: 10,
-		Phase2: 4,
-		Phase3: 4,
-		Phase4: 0,
-	},
-	4: {
-		Phase1: 8,
-		Phase2: 4,
-		Phase3: 4,
-		Phase4: 0,
-	},
-	5: {
-		Phase1: 8,
-		Phase2: 3,
-		Phase3: 3,
-		Phase4: 0,
-	},
 }
 
 // DealArtPieces deals ArtPieces to the players

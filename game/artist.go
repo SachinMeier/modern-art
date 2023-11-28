@@ -61,11 +61,11 @@ func AddTieBreakers(artists map[Artist]int) map[Artist]int {
 	// return a deep copy to avoid messing with Phase state
 	// and allow Phase.RankedArtists() to be called multiple times
 	return map[Artist]int{
-		Manuel: artists[Manuel] + TieBreakerPoint(4),
-		Sigrid: artists[Sigrid] + TieBreakerPoint(3),
-		Daniel: artists[Daniel] + TieBreakerPoint(2),
-		Ramon:  artists[Ramon] + TieBreakerPoint(1),
-		Rafael: artists[Rafael],
+		Manuel: artists[Manuel] + Tiebreakers[Manuel],
+		Sigrid: artists[Sigrid] + Tiebreakers[Sigrid],
+		Daniel: artists[Daniel] + Tiebreakers[Daniel],
+		Ramon:  artists[Ramon] + Tiebreakers[Ramon],
+		Rafael: artists[Rafael] + Tiebreakers[Rafael],
 	}
 }
 
@@ -79,8 +79,8 @@ type ArtPiece struct {
 }
 
 // NewArtPiece returns a new ArtPiece with the given name and artist.
-func NewArtPiece(artist Artist, name string) ArtPiece {
-	return ArtPiece{
+func NewArtPiece(artist Artist, name string) *ArtPiece {
+	return &ArtPiece{
 		Name:   name,
 		Artist: artist,
 	}

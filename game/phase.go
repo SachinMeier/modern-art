@@ -13,8 +13,9 @@ const (
 	Phase4
 )
 
-// FinalPhase is the last phase. This is used to check if the game is over.
-const FinalPhase = Phase4
+// MaxArtPiecePointsPerPhase is the minimum number of points for a given artist
+// Use this when comparing with ArtistCounts
+var MaxArtPiecePointsPerPhase = Point(MaxArtPiecesPerPhase)
 
 // AllPhases returns a slice of all PhaseNumbers
 func AllPhases() []PhaseNumber {
@@ -43,21 +44,6 @@ func NewPhase() *Phase {
 func (p *Phase) Len() int {
 	return len(p.Auctions)
 }
-
-// RankPayouts are the payouts for the top 3 artists in a phase.
-const (
-	RankPayout1 = 30
-	RankPayout2 = 20
-	RankPayout3 = 10
-)
-
-// maxArtPiecesPerPhase is the minimum number of art pieces for a given artist
-// needed to end the round. DO NOT USE
-const maxArtPiecesPerPhase = 5
-
-// MaxArtPiecePointsPerPhase is the minimum number of points for a given artist
-// Use this when comparing with ArtistCounts
-var MaxArtPiecePointsPerPhase = Point(maxArtPiecesPerPhase)
 
 // IsOver returns true if the given ArtPiece ends the phase.
 func (p *Phase) IsOver() bool {

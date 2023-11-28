@@ -15,6 +15,7 @@ func newAuctionWithWinningBid(auctioneer game.Player, artist game.Artist,
 	return game.NewAuction(auctioneer, &artPiece, game.NewBid(bidder, value))
 }
 
+// NewPhase creates a new phase with the given artist counts
 func newPhase(manuel, sigrid, daniel, ramon, rafael int) *game.Phase {
 	return &game.Phase{
 		ArtistCounts: map[game.Artist]int{
