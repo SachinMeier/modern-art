@@ -13,7 +13,8 @@ const (
 )
 
 // MaxArtPiecesPerPhase is the minimum number of art pieces for a given artist
-// needed to end the round. DO NOT USE
+// needed to end the round.
+// 5
 const MaxArtPiecesPerPhase = 5
 
 // FinalPhase is the last phase. This is used to check if the game is over.
@@ -31,6 +32,18 @@ var Tiebreakers = map[Artist]int{
 // ArtPiecesPerPhase map[playerCount]map[phaseNumber]artPiecesPerPhase
 // TODO: check these numbers
 var ArtPiecesPerPhase = map[int]map[PhaseNumber]int{
+	1: {
+		Phase1: 3,
+		Phase2: 2,
+		Phase3: 2,
+		Phase4: 0,
+	},
+	2: {
+		Phase1: 12,
+		Phase2: 8,
+		Phase3: 8,
+		Phase4: 0,
+	},
 	3: {
 		Phase1: 10,
 		Phase2: 6,

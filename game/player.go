@@ -42,10 +42,14 @@ type Player interface {
 	HoldAuction() (*Auction, error)
 	// Bid requests the Player to place a Bid on an Auction
 	Bid(*Auction) (*Bid, error)
+	// OpenBid requests the Player to place a Bid on an Auction of type AuctionTypeOpen
+	// Players should listen for new winning bids on the recv channel and send their bids on the send channel.
+	// The game will close the recv channel when the auction is over.
+	OpenBid(*Auction, <-chan *Bid, chan<- *Bid)
 	// HandleAuctionResult informs the Player of the result of an Auction by sharing the wining Auction.
-	// If a player wins an auction, they should add the ArtPiece to their Collection.
+	// If a player wins an auction, they should add the ArtPiece to their collection.
 	HandleAuctionResult(*Auction)
-	// AddArtPieces adds ArtPiece's to the Player's Hand
+	// AddArtPieces adds ArtPiece's to the Player's hand
 	AddArtPieces([]*ArtPiece)
 	// MoveMoney gives the Player money. Currently only used for payouts.
 	MoveMoney(int)

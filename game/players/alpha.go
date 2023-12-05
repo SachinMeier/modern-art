@@ -3,7 +3,6 @@ package players
 import (
 	"fmt"
 	"github.com/SachinMeier/modern-art.git/game"
-	"log"
 	"math"
 )
 
@@ -19,7 +18,7 @@ type AlphaPlayer struct {
 	money      int
 
 	// TODO: possibly make this a map[game.Player][]*game.ArtPiece
-	otherHands [][]*game.ArtPiece
+	otherCollections [][]*game.ArtPiece
 
 	currentPhase *game.Phase
 	phases       []*game.Phase
@@ -37,10 +36,10 @@ func NewAlphaPlayer(name string) *AlphaPlayer {
 		collection: make(map[game.Artist][]*game.ArtPiece),
 		money:      0,
 
-		otherHands:   make([][]*game.ArtPiece, 0),
-		currentPhase: game.NewPhase(),
-		phases:       make([]*game.Phase, 0),
-		phasePayouts: make([]map[game.Artist]int, 0),
+		otherCollections: make([][]*game.ArtPiece, 0),
+		currentPhase:     game.NewPhase(),
+		phases:           make([]*game.Phase, 0),
+		phasePayouts:     make([]map[game.Artist]int, 0),
 	}
 }
 
@@ -90,13 +89,16 @@ func (p *AlphaPlayer) ExpectedBid(artist game.Artist) int {
 		return 0
 	}
 	competitiveness := p.calculateCompetitiveness(artist)
-	log.Printf("competitiveness for %s: %f\n", artist, competitiveness)
+	//log.Printf("competitiveness for %s: %f\n", artist, competitiveness)
 	// normalize the competitiveness scale from 100 to the payout range
 	maxPayout := p.maxPayout(artist)
 	scale := float64(maxPayout) / 100.0
+	scaledComp := competitiveness * scale
 
-	expectedBid := int(math.Floor(competitiveness * scale))
-	return nonNegative(expectedBid)
+	// high uncertainty reduces player bids
+	expectedBid := scaledComp - (scaledComp / uncertaintyFactor(artist, p.currentPhase))
+
+	return nonNegative(int(math.Floor(expectedBid)))
 }
 
 func nonNegative(i int) int {
@@ -113,7 +115,7 @@ const oneThird = 1.0 / 3.0
 func (p *AlphaPlayer) calculateCompetitiveness(artist game.Artist) float64 {
 	/*
 		simple logic is that base case is each card 1-5 is worth 20 points.
-		because its 1/5th of the way towards first place. We add the tiebreakers
+		because it's 1/5th of the way towards first place. We add the tiebreakers
 		to give a slight edge to tiebreaker winners.
 
 		Then, we look at the competition and add or deduct smaller amounts
@@ -139,22 +141,10 @@ func (p *AlphaPlayer) calculateCompetitiveness(artist game.Artist) float64 {
 		// divide by Points to see how many pcs diff between self and other
 		nLead := float64(n+game.PointsPerArtPiece-ct.Count) / float64(game.MaxArtPiecePointsPerPhase)
 
-		// simpler algorithm
-		//if nLead > game.PointsPerArtPiece {
-		//	// self is already ahead of this guy.
-		//	competitiveness += placeWeights(i)
-		//} else if nLead < 0 && nLead > -game.PointsPerArtPiece {
-		//	// if self is played, it will overtake this artist
-		//	competitiveness += placeWeights(i)/2.0
-		//} else {
-		//	// if self is played, it will not overtake this artist
-		//	competitiveness += 0
-		//}
-
 		// take cube root of nLead to get a diminishing return
 		// in either direction.
 		cubedDelta := cubeRoot(nLead)
-		log.Printf("cubedDelta for %s vs. %s: %f\n", artist, ct.Artist, cubedDelta)
+		//log.Printf("cubedDelta for %s vs. %s: %f\n", artist, ct.Artist, cubedDelta)
 		weightedDelta := placeWeights(i, cubedDelta)
 
 		// placedWeights makes competitiveness more related
@@ -163,6 +153,45 @@ func (p *AlphaPlayer) calculateCompetitiveness(artist game.Artist) float64 {
 		competitiveness = competitiveness + (weightedDelta * pieceScaleFactor)
 	}
 	return competitiveness
+}
+
+/*
+uncertaintyFactor is a measure of how close the competition is for any spot on the podium
+at the time of this player's auction. This is important because it means a (4,4,4,4,4) scenario
+has zero uncertainty for the auctioneer, while it has very high uncertainty for bidding players.
+
+Uncertainty is high when there are more than 3 artists "in the race".
+
+Tiebreakers are significant factors in uncertainty. Manuel has much lower uncertainty than Rafael
+because he can truly lock in second place.
+
+Maximal uncertainty is (0,0,0,0,0).
+
+TODO: although we won't currently account for this, uncertainty is further lowered with more cards by the
+fact that we can guess who will play what. (3,3,3,3,3) is more certain than (1,1,1,1,1) because we know
+who holds what.
+
+Summary of the algo:
+Factors:
+- Number of pieces of this artist played
+- Sum of art pcs played   phase.Len()
+- GINI coefficient of cards played ???
+- Tiebreaker value for artist   (5 - tiebreaker)
+
+attempt?: (sum of MIN(top 3 || non-zeros)) / if(ct_zeros>2: 2*ct_zeros, else: sum of MAX(bottom 2 || zero) * tiebreaker
+
+3 zeros means higher certainty for top 2 and lower certainty for bottom 3
+
+TODO: this is a very rough first pass.
+the current ranking of the artist is very important to uncertainty. However, it is mostly accounted for in the
+competitiveness metric
+
+for now: KISS! linear by number of pcs played
+*/
+func uncertaintyFactor(artist game.Artist, phase *game.Phase) float64 {
+	played := float64(phase.Len())
+	// 21 is the max, lets make this a factor of 10
+	return 10 - (played / 2.0)
 }
 
 func cubeRoot(i float64) float64 {
@@ -211,7 +240,7 @@ func placeWeights(i int, val float64) float64 {
 }
 
 func (p *AlphaPlayer) artistWouldEndRound(artist game.Artist) bool {
-	return p.currentPhase.ArtistCounts[artist] >= game.MaxArtPiecePointsPerPhase-game.Point(1)
+	return p.currentPhase.ArtistCounts[artist]+game.PointsPerArtPiece >= game.MaxArtPiecePointsPerPhase
 }
 
 func (p *AlphaPlayer) pastPayoutSum(artist game.Artist) int {
@@ -249,9 +278,13 @@ func (p *AlphaPlayer) HandleAuctionResult(auction *game.Auction) {
 		p.phasePayouts = append(p.phasePayouts, game.CumulativePayouts(p.phases))
 		p.currentPhase = game.NewPhase()
 	}
+	if auction.WinningBid.Bidder.Name() == p.name {
+		// add the ArtPiece to their collection
+		p.collection[auction.ArtPiece.Artist] = append(p.collection[auction.ArtPiece.Artist], auction.ArtPiece)
+	}
 }
 
-// AddArtPieces adds ArtPiece's to the Player's Hand
+// AddArtPieces adds ArtPiece's to the Player's hand
 func (p *AlphaPlayer) AddArtPieces(pieces []*game.ArtPiece) {
 	for _, piece := range pieces {
 		if val, ok := p.hand[piece.Artist]; !ok {

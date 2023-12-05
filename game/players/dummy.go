@@ -34,9 +34,9 @@ func (dp *DummyPlayer) SetName(name string) {
 
 // HoldAuction returns the first card in their Hand
 func (dp *DummyPlayer) HoldAuction() (*game.Auction, error) {
-	// take first card in Hand
+	// take first card in hand
 	artPiece := dp.Hand[0]
-	// remove it from the Hand
+	// remove it from the hand
 	dp.Hand = dp.Hand[1:]
 	return &game.Auction{
 		Auctioneer: dp,
@@ -57,7 +57,7 @@ func (dp *DummyPlayer) Bid(auction *game.Auction) (*game.Bid, error) {
 // HandleAuctionResult informs the Player of the result of an game.Auction
 func (dp *DummyPlayer) HandleAuctionResult(auction *game.Auction) {
 	if auction.WinningBid.Bidder.Name() == dp.name {
-		// add the ArtPiece to their Collection
+		// add the ArtPiece to their collection
 		dp.Collection = append(dp.Collection, auction.ArtPiece)
 	}
 }

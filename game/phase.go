@@ -15,7 +15,7 @@ const (
 
 // MaxArtPiecePointsPerPhase is the minimum number of points for a given artist
 // Use this when comparing with ArtistCounts
-var MaxArtPiecePointsPerPhase = Point(MaxArtPiecesPerPhase)
+var MaxArtPiecePointsPerPhase = Point(MaxArtPiecesPerPhase) // 50
 
 // AllPhases returns a slice of all PhaseNumbers
 func AllPhases() []PhaseNumber {
