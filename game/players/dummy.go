@@ -54,6 +54,37 @@ func (dp *DummyPlayer) Bid(auction *game.Auction) (*game.Bid, error) {
 	}, nil
 }
 
+/*
+OpenBid decides a maxBid and always bids until they reach that maxBid or win the Auction
+*/
+func (p *DummyPlayer) OpenBid(auction *game.Auction, recv <-chan *game.Bid, send chan<- *game.Bid) {
+	maxBid, err := p.Bid(auction)
+	if err != nil {
+		close(send)
+		return
+	}
+	currBid := auction.WinningBid
+	more := true
+	for {
+		if !more {
+			close(send)
+			return
+		}
+		if currBid.Bidder.Name() != p.Name() && currBid.Value < maxBid.Value {
+			send <- p.oneUpBid(currBid)
+		}
+		currBid, more = <-recv
+	}
+
+}
+
+func (p *DummyPlayer) oneUpBid(bid *game.Bid) *game.Bid {
+	return &game.Bid{
+		Bidder: p,
+		Value:  bid.Value + 1,
+	}
+}
+
 // HandleAuctionResult informs the Player of the result of an game.Auction
 func (dp *DummyPlayer) HandleAuctionResult(auction *game.Auction) {
 	if auction.WinningBid.Bidder.Name() == dp.name {

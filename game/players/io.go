@@ -105,6 +105,54 @@ func (p *IOPlayer) Bid(auction *game.Auction) (*game.Bid, error) {
 	}, nil
 }
 
+// OpenBid requests the Player to place Bid's on an Auction of type AuctionTypeOpen
+func (p *IOPlayer) OpenBid(auction *game.Auction, recv <-chan *game.Bid, send chan<- *game.Bid) {
+	fmt.Printf("The following card is up for live auction:\n")
+	printAuction(auction)
+	fmt.Printf("You have %d money. You can keep entering new bids until the auction is over or bid 0 to quit the auction.\n", p.Money)
+	// print all new bids
+	auctionOver := make(chan bool, 1)
+	go func() {
+		for {
+			bid, more := <-recv
+			if !more {
+				auctionOver <- true
+				return
+			}
+			fmt.Printf("New best bid: (%s) %d\n", bid.Bidder.Name(), bid.Value)
+		}
+	}()
+
+	// listen for input
+	userBids := make(chan int, 1)
+
+	go func() {
+		for {
+			choice := p.handleInput()
+			if choice == 0 {
+				fmt.Printf("You quit the auction. Waiting for auction to end.\n")
+				close(send)
+				return
+			}
+			userBids <- choice
+		}
+	}()
+
+	for {
+		select {
+		case <-auctionOver:
+			fmt.Printf("Auction is over.\n")
+			return
+		case choice := <-userBids:
+			send <- &game.Bid{
+				Bidder: p,
+				Value:  choice,
+			}
+		}
+	}
+
+}
+
 // HandleAuctionResult informs the Player of the result of a game.Auction
 func (p *IOPlayer) HandleAuctionResult(auction *game.Auction) {
 	p.currentPhase.AddAuction(auction)
@@ -229,7 +277,7 @@ func strArtPiece(artPiece *game.ArtPiece) string {
 }
 
 func printAuction(auction *game.Auction) {
-	fmt.Printf("Auction:\n")
+	fmt.Printf("%s Auction:\n", auction.Type)
 	fmt.Printf("  ArtPiece: %s\n", strArtPiece(auction.ArtPiece))
 	fmt.Printf("  CurrentBid: %d\n", auction.WinningBid.Value)
 	printSeparator()

@@ -40,6 +40,18 @@ func NewPhase() *Phase {
 	}
 }
 
+// Copy returns a copy of the Phase
+func (p *Phase) Copy() *Phase {
+	newPhase := NewPhase()
+	newPhase.Auctions = make([]*Auction, len(p.Auctions))
+	copy(newPhase.Auctions, p.Auctions)
+	newPhase.ArtistCounts = make(map[Artist]int)
+	for artist, count := range p.ArtistCounts {
+		newPhase.ArtistCounts[artist] = count
+	}
+	return newPhase
+}
+
 // Len returns the number of Auction in the Phase.
 func (p *Phase) Len() int {
 	return len(p.Auctions)

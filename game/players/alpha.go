@@ -1,7 +1,6 @@
 package players
 
 import (
-	"fmt"
 	"github.com/SachinMeier/modern-art.git/game"
 	"math"
 )
@@ -52,6 +51,8 @@ func (p *AlphaPlayer) SetName(name string) {
 	p.name = name
 }
 
+// Auctioning
+
 func (p *AlphaPlayer) HoldAuction() (*game.Auction, error) {
 	artistToSell := game.ArtistNone
 	maxExpectedValue := math.MinInt
@@ -91,13 +92,13 @@ func (p *AlphaPlayer) ExpectedBid(artist game.Artist) int {
 	competitiveness := p.calculateCompetitiveness(artist)
 	//log.Printf("competitiveness for %s: %f\n", artist, competitiveness)
 	// normalize the competitiveness scale from 100 to the payout range
+	// should we also/instead normalize competitiveness based on the competitiveness of all other artists?
 	maxPayout := p.maxPayout(artist)
 	scale := float64(maxPayout) / 100.0
 	scaledComp := competitiveness * scale
 
-	// high uncertainty reduces player bids
-	expectedBid := scaledComp - (scaledComp / uncertaintyFactor(artist, p.currentPhase))
-
+	// low certainty reduces player bids
+	expectedBid := scaledComp * uncertaintyFactor(artist, p.currentPhase)
 	return nonNegative(int(math.Floor(expectedBid)))
 }
 
@@ -108,11 +109,22 @@ func nonNegative(i int) int {
 	return i
 }
 
-const oneThird = 1.0 / 3.0
+/*
+	 calculateCompetitiveness calculates how likely an artist is to place.
+		aiming for 100 as guaranteed first place, 0 as guaranteed last place (latter being possible)
 
-// calculateCompetitiveness calculates how likely an artist is to place.
-// aiming for 100 as guaranteed first place, 0 as guaranteed last place (latter being possible)
+baseComp = 20*N + tiebreaker
+for (otherArtists):
+
+	±(nLead)^(1/3) * placeWeight
+*/
 func (p *AlphaPlayer) calculateCompetitiveness(artist game.Artist) float64 {
+	// create a copy of the phase if the artist were to be played
+	hypotheticalPhase := p.currentPhase.Copy()
+	hypotheticalPhase.AddAuction(&game.Auction{
+		Auctioneer: p,
+		ArtPiece:   game.NewArtPiece(artist, "hypothetical"),
+	})
 	/*
 		simple logic is that base case is each card 1-5 is worth 20 points.
 		because it's 1/5th of the way towards first place. We add the tiebreakers
@@ -121,17 +133,21 @@ func (p *AlphaPlayer) calculateCompetitiveness(artist game.Artist) float64 {
 		Then, we look at the competition and add or deduct smaller amounts
 		based on how much more or less we have than the other artists.
 	*/
-	n := p.currentPhase.ArtistCounts[artist]
+	tiebreakerScaleFactor := 0.75
+	n := hypotheticalPhase.ArtistCounts[artist] + int(float64(game.Tiebreakers[artist])*tiebreakerScaleFactor)
 
 	artPieceBaseFactor := int(100.0 / float64(game.MaxArtPiecePointsPerPhase))
-	competitiveness := float64(n*artPieceBaseFactor + game.Tiebreakers[artist])
+
+	justPlayedBoost := 10.0
+	competitiveness := float64(n*artPieceBaseFactor) + justPlayedBoost
+	//fmt.Printf("base competitiveness for %s: %f\n", artist, competitiveness)
 
 	// since we're considering playing this artist, it will get a boost of
 	// one more art piece
 	//newPieceBaseFactor := float64(game.MaxArtPiecePointsPerPhase) / 10.0
-	// scales down how much each comparison matters
-	pieceScaleFactor := 2.0
-	for i, ct := range rankedArtistCounts(p.currentPhase) {
+	// scales up/down how much each comparison matters
+	compScaleFactor := 4.0
+	for i, ct := range rankedArtistCounts(hypotheticalPhase) {
 		// skip self
 		if artist == ct.Artist {
 			continue
@@ -139,19 +155,22 @@ func (p *AlphaPlayer) calculateCompetitiveness(artist game.Artist) float64 {
 
 		// how much more does other artist have than self
 		// divide by Points to see how many pcs diff between self and other
-		nLead := float64(n+game.PointsPerArtPiece-ct.Count) / float64(game.MaxArtPiecePointsPerPhase)
+
+		nLead := float64(n-ct.Count) / float64(game.MaxArtPiecePointsPerPhase)
+		//fmt.Printf("lead vs %s for %s: %f (%d - %d)\n", ct.Artist, artist, nLead, n, ct.Count)
 
 		// take cube root of nLead to get a diminishing return
 		// in either direction.
-		cubedDelta := cubeRoot(nLead)
+		cubedLead := cubeRoot(nLead)
 		//log.Printf("cubedDelta for %s vs. %s: %f\n", artist, ct.Artist, cubedDelta)
-		weightedDelta := placeWeights(i, cubedDelta)
+		weightedDelta := placeWeights(i, cubedLead)
 
 		// placedWeights makes competitiveness more related
 		// to the first place than the third place (for example)
-		// TODO: some constant is needed here
-		competitiveness = competitiveness + (weightedDelta * pieceScaleFactor)
+		//fmt.Printf("  comp for %s vs. %s: %f\n", artist, ct.Artist, weightedDelta*compScaleFactor)
+		competitiveness = competitiveness + (weightedDelta * compScaleFactor)
 	}
+	//fmt.Printf("final competitiveness for %s: %f\n", artist, competitiveness)
 	return competitiveness
 }
 
@@ -186,13 +205,16 @@ TODO: this is a very rough first pass.
 the current ranking of the artist is very important to uncertainty. However, it is mostly accounted for in the
 competitiveness metric
 
-for now: KISS! linear by number of pcs played
+for now: KISS! .8 + .01*played
+alternative: 1-\left(\frac{1}{\left(\sqrt{\left(\frac{x}{8}+.8\right)}\right)}-.75\right)
 */
 func uncertaintyFactor(artist game.Artist, phase *game.Phase) float64 {
 	played := float64(phase.Len())
-	// 21 is the max, lets make this a factor of 10
-	return 10 - (played / 2.0)
+	// 20 is the max, lets make this a factor of 10
+	return .8 + .01*played
 }
+
+const oneThird = 1.0 / 3.0
 
 func cubeRoot(i float64) float64 {
 	// since math.Pow doesn't accept negatives, we need to
@@ -206,33 +228,30 @@ func cubeRoot(i float64) float64 {
 	return negate * cubedDelta
 }
 
-// TODO: this should be based on whether cubedDelta is positive or negative
-// beating a first place artist shouldbe significant, while losing to it should not,
-// and vice versa for last place
-func placeWeights(i int, val float64) float64 {
+func placeWeights(otherRank int, val float64) float64 {
 	// TODO: make this a const?
-	artistCt := len(game.AllArtists())
-	// losing to 4th place is as significant as beating 1st place
+	// losing to 4th place is as significant as beating 2nd place
 	if val < 0 {
-		i = artistCt - 1 - i
+		artistCt := len(game.AllArtists())
+		otherRank = artistCt - 1 - otherRank
 	}
 	// TODO: make this a continuous function, in the math sense
-	switch i {
-	// should never happen: losing to last and beating 1st are impossible
+	switch otherRank {
+	// should never happen. Beating first place and losing to last place are impossible
 	case 0:
-		return 1.2 * val
+		return 10.0 * val
 	// beat second place or lose to 4th place
 	case 1:
-		return 1.0 * val
+		return 2.0 * val
 	// beat or lose to third place
 	case 2:
-		return 0.7 * val
+		return 1.5 * val
 	// lose to second place or beat fourth place
 	case 3:
-		return 0.45 * val
+		return 1.0 * val
 	// lose to first place or beat last place
 	case 4:
-		return 0.2 * val
+		return 0.7 * val
 	// should never happen
 	default:
 		return 0.0
@@ -267,8 +286,21 @@ func rankPayoutSum() int {
 	return game.RankPayout1 + game.RankPayout2 + game.RankPayout3
 }
 
+// Bidding
+
 func (p *AlphaPlayer) Bid(auction *game.Auction) (*game.Bid, error) {
-	return nil, fmt.Errorf("not implemented")
+	switch auction.Type {
+	case game.AuctionTypeOneShot:
+		return p.bidOneShot(auction)
+	case game.AuctionTypeBlind:
+		return p.bidBlind(auction)
+	case game.AuctionTypeSetPrice:
+		return p.bidSetPrice(auction)
+	}
+}
+
+func (p *AlphaPlayer) OpenBid(auction *game.Auction, recv <-chan *game.Bid, send chan<- *game.Bid) {
+	return // not implemented
 }
 
 func (p *AlphaPlayer) HandleAuctionResult(auction *game.Auction) {

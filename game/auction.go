@@ -1,6 +1,9 @@
 package game
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+)
 
 // Auction is an auction for an ArtPiece
 type Auction struct {
@@ -59,6 +62,9 @@ func (a *Auction) HandleBid(bid *Bid) bool {
 }
 
 func validateBid(player *GamePlayer, bid *Bid) error {
+	if player.Player.Name() != bid.Bidder.Name() {
+		return fmt.Errorf("bidder %s does not match player %s", bid.Bidder.Name(), player.Player.Name())
+	}
 	if bid.Value > player.Money {
 		return ErrNotEnoughMoney
 	}
@@ -152,7 +158,8 @@ func runOpenAuction(auction *Auction, bidders []*GamePlayer) {
 // funnelBids funnels bids from many channels into a single channel, for easy synchronous handling
 func funnelBids(bids chan *Bid, recvs []chan *Bid) {
 	var wg sync.WaitGroup
-	wg.Add(len(recvs))
+	// when all but one bidder have closed their channels, close the bids channel, triggering the end of the auction
+	wg.Add(len(recvs) - 1)
 	for _, recv := range recvs {
 		go func(recv chan *Bid) {
 			for {

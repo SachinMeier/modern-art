@@ -11,7 +11,7 @@ import (
 
 func main() {
 	simulateAllPossibleCurrentPhases()
-	//simulateSinglePhase(4, 4, 4, 4, 4)
+	//simulateSinglePhase(0, 0, 0, 0, 0)
 	//runManualGame()
 }
 
